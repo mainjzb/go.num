@@ -3,6 +3,7 @@ package zh
 import (
 	"fmt"
 	"io"
+	"strings"
 )
 
 type Uint64 uint64
@@ -37,6 +38,10 @@ func (num Uint64) String() (str string) {
 		num /= 10000
 		pos++
 	}
+	if strings.HasPrefix(str, "一十"){
+		ru := []rune(str)
+		str = string(ru[1:])
+	}
 
 	return
 }
@@ -62,7 +67,6 @@ func secString(sec Uint64) string {
 		pos++
 		sec /= 10
 	}
-
 	return str
 }
 
@@ -84,35 +88,44 @@ var words = map[rune]uint64{
 
 func (num *Uint64) Scan(state fmt.ScanState, verb rune) error {
 	var number, sec uint64
+
+	first := true
+	
 	for {
+		// 读取一个字
 		v, _, err := state.ReadRune()
 		if err == io.EOF {
-			sec += number
-			*num += Uint64(sec)
-			return nil
+			break
 		} else if err != nil {
 			return err
 		}
-		n, ok := words[v]
 
-		if ok {
+		if first == true && v == '十' {
+			number = 1
+		}
+		first = false
+
+		if n, ok := words[v]; ok {
+			// 是数字
 			number = n
-		} else {
-			unit, ok := pairs[v]
-			if !ok {
-				sec += number
-				*num += Uint64(sec)
-				return nil
-			}
+		} else if unit, ok := pairs[v]; ok {
+			// 是单位
 			if unit.isUnit {
-				sec = (sec + number) * unit.value
-				*num += Uint64(sec)
+				// 是权
+				*num += Uint64((sec + number) * unit.value)
 				sec = 0
 			} else {
 				sec += (number * unit.value)
 			}
 
 			number = 0
+
+		} else {
+			// 其他字符
+			break
 		}
 	}
+
+	*num += Uint64(sec + number)
+	return nil
 }
